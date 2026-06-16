@@ -48,7 +48,12 @@ async def lifespan(app: FastMCP) -> AsyncIterator[None]:
             await _client.close()
 
 
-mcp = FastMCP("ebay-browse", lifespan=lifespan)
+mcp = FastMCP(
+    "ebay-browse",
+    lifespan=lifespan,
+    host="0.0.0.0",
+    port=int(os.getenv("PORT", "8000")),
+)
 
 
 @mcp.tool()
@@ -88,7 +93,7 @@ async def ebay_get_item(item_id: str) -> str:
 
 
 def main() -> None:
-    mcp.run(transport="sse", host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    mcp.run(transport="sse")
 
 
 if __name__ == "__main__":
