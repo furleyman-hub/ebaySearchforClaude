@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ebay": {
+      "command": "python3",
+      "args": ["-m", "ebay_mcp.server"],
+      "cwd": "/home/user/ebaySearchforClaude",
+      "env": {
+        "PYTHONPATH": "/home/user/ebaySearchforClaude/src"
+      }
+    }
+  }
+}
