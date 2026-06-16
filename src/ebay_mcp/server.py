@@ -97,6 +97,8 @@ async def ebay_get_item(item_id: str) -> str:
     categories, description, and seller info.
     """
     assert _client is not None
+    if item_id.isdigit():
+        item_id = f"v1|{item_id}|0"
     try:
         raw = await _client.get_item(item_id)
         return json.dumps(format_item_detail(raw), indent=2)
