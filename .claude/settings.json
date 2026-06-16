@@ -1,12 +1,7 @@
 {
   "mcpServers": {
     "ebay": {
-      "command": "python3",
-      "args": ["-m", "ebay_mcp.server"],
-      "cwd": "/home/user/ebaySearchforClaude",
-      "env": {
-        "PYTHONPATH": "/home/user/ebaySearchforClaude/src"
-      }
+      "url": "https://YOUR-CODESPACE-NAME-8000.app.github.dev/sse"
     }
   }
 }

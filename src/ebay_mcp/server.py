@@ -88,7 +88,7 @@ async def ebay_get_item(item_id: str) -> str:
 
 
 def main() -> None:
-    mcp.run(transport="stdio")
+    mcp.run(transport="sse", host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
 
 
 if __name__ == "__main__":
