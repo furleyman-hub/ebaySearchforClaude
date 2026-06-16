@@ -73,36 +73,52 @@ class EbayBrowseClient:
         await self._http.aclose()
 
 
-class EbayOrderClient:
-    def __init__(self, user_token_manager: EbayUserTokenManager, base_url: str) -> None:
-        self._user_token_manager = user_token_manager
-        self._base_url = base_url
+class EbayTradingClient:
+    """Uses eBay Trading API (SOAP) with user OAuth token to fetch buyer orders."""
 
-    async def _auth_headers(self) -> dict[str, str]:
+    _TRADING_URL = "https://api.ebay.com/ws/api.dll"
+    _COMPAT_LEVEL = "967"
+
+    def __init__(self, user_token_manager: "EbayUserTokenManager", site_id: str = "0") -> None:
+        self._user_token_manager = user_token_manager
+        self._site_id = site_id
+        self._http = httpx.AsyncClient(timeout=30.0)
+
+    async def _headers(self, call_name: str) -> dict[str, str]:
         token = await self._user_token_manager.get_token()
         return {
-            "Authorization": f"Bearer {token}",
-            "Content-Language": "en-US",
+            "X-EBAY-API-SITEID": self._site_id,
+            "X-EBAY-API-COMPATIBILITY-LEVEL": self._COMPAT_LEVEL,
+            "X-EBAY-API-CALL-NAME": call_name,
+            "X-EBAY-API-IAF-TOKEN": token,
+            "Content-Type": "text/xml",
         }
 
-    async def get_orders(self, limit: int = 20, days_back: int = 90) -> dict:
+    async def get_orders(self, days_back: int = 60, page: int = 1) -> str:
+        """Returns raw XML response string from GetOrders Trading API call."""
         from datetime import datetime, timezone, timedelta
-        since = datetime.now(timezone.utc) - timedelta(days=days_back)
-        iso_date = since.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                f"{self._base_url}/buy/order/v2/order",
-                params={"limit": limit, "filter": f"creationdate:[{iso_date}..]"},
-                headers=await self._auth_headers(),
-            )
+        create_time_from = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime(
+            "%Y-%m-%dT%H:%M:%S.000Z"
+        )
+        body = f"""<?xml version="1.0" encoding="utf-8"?>
+<GetOrdersRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials/>
+  <CreateTimeFrom>{create_time_from}</CreateTimeFrom>
+  <CreateTimeTo>{datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")}</CreateTimeTo>
+  <OrderRole>Buyer</OrderRole>
+  <OrderStatus>All</OrderStatus>
+  <Pagination>
+    <EntriesPerPage>25</EntriesPerPage>
+    <PageNumber>{page}</PageNumber>
+  </Pagination>
+</GetOrdersRequest>"""
+        response = await self._http.post(
+            self._TRADING_URL,
+            headers=await self._headers("GetOrders"),
+            content=body.encode("utf-8"),
+        )
         response.raise_for_status()
-        return response.json()
+        return response.text
 
-    async def get_order(self, order_id: str) -> dict:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                f"{self._base_url}/buy/order/v2/order/{order_id}",
-                headers=await self._auth_headers(),
-            )
-        response.raise_for_status()
-        return response.json()
+    async def close(self) -> None:
+        await self._http.aclose()

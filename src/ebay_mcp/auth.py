@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 import httpx
 
-_USER_SCOPES = "https://api.ebay.com/oauth/api_scope/buy.order.readonly"
+_USER_SCOPES = "https://api.ebay.com/oauth/api_scope"
 
 
 class EbayUserTokenManager:
