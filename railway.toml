@@ -1,0 +1,5 @@
+[build]
+buildCommand = "pip install -e ."
+
+[deploy]
+startCommand = "python3 -m ebay_mcp.server"

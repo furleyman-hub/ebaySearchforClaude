@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "ebay": {
-      "url": "https://YOUR-CODESPACE-NAME-8000.app.github.dev/sse"
+      "url": "https://YOUR-APP-NAME.up.railway.app/sse"
     }
   }
 }
