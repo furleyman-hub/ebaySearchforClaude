@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from mcp.server.auth.provider import AccessToken, AuthorizationParams, OAuthAuthorizationServerProvider
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
+from pydantic import AnyUrl
 
 
 @dataclass
@@ -26,26 +27,56 @@ class _RefreshToken:
     scopes: list[str]
 
 
+class _PermissiveClient(OAuthClientInformationFull):
+    """Client that accepts any redirect_uri (needed since we don't know claude.ai's URI in advance)."""
+
+    def validate_redirect_uri(self, redirect_uri: AnyUrl | None) -> AnyUrl:
+        if redirect_uri is not None:
+            return redirect_uri
+        if self.redirect_uris:
+            return self.redirect_uris[0]
+        raise ValueError("No redirect URI provided")
+
+
 class PersonalOAuthProvider(
     OAuthAuthorizationServerProvider[_AuthCode, _RefreshToken, AccessToken]
 ):
     """
     In-memory OAuth 2.0 provider that auto-approves all clients.
-    Designed for personal-use MCP servers where any connecting client is trusted.
-    State is lost on restart; clients re-authenticate automatically via refresh tokens.
+    Supports both dynamic client registration and a pre-configured static client
+    (client_id / client_secret) for use with connectors that require pre-registration.
+    State is lost on restart; clients re-authenticate via refresh tokens automatically.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        static_client_id: str | None = None,
+        static_client_secret: str | None = None,
+    ) -> None:
         self._clients: dict[str, OAuthClientInformationFull] = {}
         self._auth_codes: dict[str, _AuthCode] = {}
         self._refresh_tokens: dict[str, _RefreshToken] = {}
         self._access_tokens: dict[str, AccessToken] = {}
 
+        if static_client_id:
+            self._clients[static_client_id] = _PermissiveClient(
+                client_id=static_client_id,
+                client_secret=static_client_secret,
+                redirect_uris=["https://claude.ai"],
+                grant_types=["authorization_code", "refresh_token"],
+                response_types=["code"],
+                token_endpoint_auth_method="client_secret_post",
+            )
+
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         return self._clients.get(client_id)
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        self._clients[client_info.client_id] = client_info
+        # Wrap dynamically registered clients as permissive too
+        permissive = _PermissiveClient(
+            **client_info.model_dump(),
+        )
+        self._clients[client_info.client_id] = permissive
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams

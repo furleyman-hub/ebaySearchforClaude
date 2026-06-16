@@ -57,7 +57,10 @@ mcp = FastMCP(
     lifespan=lifespan,
     host="0.0.0.0",
     port=int(os.getenv("PORT", "8000")),
-    auth_server_provider=PersonalOAuthProvider(),
+    auth_server_provider=PersonalOAuthProvider(
+        static_client_id=os.getenv("OAUTH_CLIENT_ID"),
+        static_client_secret=os.getenv("OAUTH_CLIENT_SECRET"),
+    ),
     auth=AuthSettings(
         issuer_url=_server_url,
         resource_server_url=_server_url,
