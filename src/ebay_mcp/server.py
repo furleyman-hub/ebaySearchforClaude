@@ -105,7 +105,7 @@ async def ebay_get_item(item_id: str) -> str:
 
 
 def main() -> None:
-    mcp.run(transport="sse")
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
