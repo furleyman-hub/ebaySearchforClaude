@@ -35,7 +35,7 @@ class EbayUserTokenManager:
             pass
 
     def get_auth_url(self, state: str = "") -> str:
-        scope_encoded = quote(_USER_SCOPES)
+        scope_encoded = quote(_USER_SCOPES, safe="")
         return (
             f"https://auth.ebay.com/oauth2/authorize"
             f"?client_id={self._app_id}"
@@ -85,7 +85,7 @@ class EbayUserTokenManager:
                         "Authorization": f"Basic {self._credentials()}",
                         "Content-Type": "application/x-www-form-urlencoded",
                     },
-                    content=f"grant_type=refresh_token&refresh_token={self._refresh_token}&scope={quote(_USER_SCOPES)}",
+                    content=f"grant_type=refresh_token&refresh_token={self._refresh_token}&scope={quote(_USER_SCOPES, safe='')}",
                 )
             if response.status_code != 200:
                 raise RuntimeError(f"eBay token refresh failed ({response.status_code}): {response.text}")
