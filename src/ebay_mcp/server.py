@@ -8,10 +8,13 @@ from typing import AsyncIterator
 from dotenv import load_dotenv
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
+from starlette.routing import Route
 
-from .auth import EbayTokenManager
-from .ebay_client import EbayBrowseClient
-from .formatters import format_item_detail, format_search_results
+from .auth import EbayTokenManager, EbayUserTokenManager
+from .ebay_client import EbayBrowseClient, EbayOrderClient
+from .formatters import format_item_detail, format_order_detail, format_orders, format_search_results
 from .oauth import PersonalOAuthProvider
 
 load_dotenv()
@@ -32,17 +35,26 @@ _marketplace_id = os.getenv("EBAY_MARKETPLACE_ID", "EBAY_US")
 
 _token_manager: EbayTokenManager | None = None
 _client: EbayBrowseClient | None = None
+_user_token_manager: EbayUserTokenManager | None = None
+_order_client: EbayOrderClient | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastMCP) -> AsyncIterator[None]:
-    global _token_manager, _client
+    global _token_manager, _client, _user_token_manager, _order_client
     _token_manager = EbayTokenManager(
         app_id=os.environ["EBAY_APP_ID"],
         cert_id=os.environ["EBAY_CERT_ID"],
         base_url=_base_url,
     )
     _client = EbayBrowseClient(_token_manager, _marketplace_id, _base_url)
+    _user_token_manager = EbayUserTokenManager(
+        app_id=os.environ["EBAY_APP_ID"],
+        cert_id=os.environ["EBAY_CERT_ID"],
+        ru_name=os.getenv("EBAY_RU_NAME", ""),
+        base_url=_base_url,
+    )
+    _order_client = EbayOrderClient(_user_token_manager, _base_url)
     try:
         yield
     finally:
@@ -66,6 +78,77 @@ mcp = FastMCP(
         resource_server_url=_server_url,
     ),
 )
+
+
+async def ebay_callback(request: Request) -> HTMLResponse:
+    code = request.query_params.get("code")
+    if not code:
+        return HTMLResponse("<h1>Error: no code received</h1>", status_code=400)
+    if _user_token_manager is None:
+        return HTMLResponse("<h1>Server not ready</h1>", status_code=503)
+    try:
+        await _user_token_manager.exchange_code(code)
+        return HTMLResponse("<h1>eBay account connected!</h1><p>You can close this tab and return to Claude.</p>")
+    except Exception as e:
+        return HTMLResponse(f"<h1>Error</h1><p>{e}</p>", status_code=500)
+
+
+mcp._custom_starlette_routes.append(Route("/ebay/callback", endpoint=ebay_callback, methods=["GET"]))
+
+
+@mcp.tool()
+async def ebay_get_auth_url() -> str:
+    """Get the eBay authorization URL to connect your eBay account.
+    Visit this URL in your browser, log in to eBay, and approve access.
+    After approval eBay will redirect you — copy the full redirect URL or just the 'code' parameter and pass it to ebay_connect.
+    """
+    assert _user_token_manager is not None
+    return _user_token_manager.get_auth_url()
+
+
+@mcp.tool()
+async def ebay_connect(code: str) -> str:
+    """Connect your eBay account by providing the authorization code from the eBay redirect.
+    Get the code by first calling ebay_get_auth_url and completing the authorization flow.
+    """
+    assert _user_token_manager is not None
+    if "?" in code:
+        from urllib.parse import urlparse, parse_qs
+        parsed = parse_qs(urlparse(code).query)
+        code = parsed.get("code", [code])[0]
+    try:
+        await _user_token_manager.exchange_code(code)
+        return json.dumps({"status": "connected", "message": "eBay account connected successfully."})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+async def ebay_get_orders(limit: int = 20, days_back: int = 90) -> str:
+    """List your recent eBay purchases with shipping and delivery status.
+    Returns order IDs, items, prices, and tracking information.
+    """
+    if _user_token_manager is None or not _user_token_manager.is_connected():
+        return json.dumps({"error": "eBay account not connected. Call ebay_get_auth_url to start the connection flow."})
+    assert _order_client is not None
+    try:
+        raw = await _order_client.get_orders(limit, days_back)
+        return json.dumps(format_orders(raw), indent=2)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+async def ebay_get_order(order_id: str) -> str:
+    """Get full details for a specific eBay order including tracking numbers and delivery status."""
+    if _user_token_manager is None or not _user_token_manager.is_connected():
+        return json.dumps({"error": "eBay account not connected. Call ebay_get_auth_url to start the connection flow."})
+    assert _order_client is not None
+    try:
+        raw = await _order_client.get_order(order_id)
+        return json.dumps(format_order_detail(raw), indent=2)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
 
 
 @mcp.tool()

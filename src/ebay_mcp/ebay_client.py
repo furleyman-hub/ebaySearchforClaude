@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from .auth import EbayTokenManager
+from .auth import EbayTokenManager, EbayUserTokenManager
 
 
 class EbayBrowseClient:
@@ -71,3 +71,38 @@ class EbayBrowseClient:
 
     async def close(self) -> None:
         await self._http.aclose()
+
+
+class EbayOrderClient:
+    def __init__(self, user_token_manager: EbayUserTokenManager, base_url: str) -> None:
+        self._user_token_manager = user_token_manager
+        self._base_url = base_url
+
+    async def _auth_headers(self) -> dict[str, str]:
+        token = await self._user_token_manager.get_token()
+        return {
+            "Authorization": f"Bearer {token}",
+            "Content-Language": "en-US",
+        }
+
+    async def get_orders(self, limit: int = 20, days_back: int = 90) -> dict:
+        from datetime import datetime, timezone, timedelta
+        since = datetime.now(timezone.utc) - timedelta(days=days_back)
+        iso_date = since.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{self._base_url}/buy/order/v2/order",
+                params={"limit": limit, "filter": f"creationdate:[{iso_date}..]"},
+                headers=await self._auth_headers(),
+            )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_order(self, order_id: str) -> dict:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{self._base_url}/buy/order/v2/order/{order_id}",
+                headers=await self._auth_headers(),
+            )
+        response.raise_for_status()
+        return response.json()
