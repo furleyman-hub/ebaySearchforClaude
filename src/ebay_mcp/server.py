@@ -81,6 +81,10 @@ mcp = FastMCP(
 
 
 async def ebay_callback(request: Request) -> HTMLResponse:
+    error = request.query_params.get("error")
+    if error:
+        desc = request.query_params.get("error_description", error)
+        return HTMLResponse(f"<h1>Access denied</h1><p>{desc}</p><p>You can close this tab.</p>", status_code=200)
     code = request.query_params.get("code")
     if not code:
         return HTMLResponse("<h1>Error: no code received</h1>", status_code=400)
