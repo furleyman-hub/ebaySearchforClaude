@@ -6,11 +6,13 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from dotenv import load_dotenv
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 
 from .auth import EbayTokenManager
 from .ebay_client import EbayBrowseClient
 from .formatters import format_item_detail, format_search_results
+from .oauth import PersonalOAuthProvider
 
 load_dotenv()
 
@@ -48,11 +50,18 @@ async def lifespan(app: FastMCP) -> AsyncIterator[None]:
             await _client.close()
 
 
+_server_url = os.getenv("SERVER_URL", "https://ebaysearchforclaude-production.up.railway.app")
+
 mcp = FastMCP(
     "ebay-browse",
     lifespan=lifespan,
     host="0.0.0.0",
     port=int(os.getenv("PORT", "8000")),
+    auth_server_provider=PersonalOAuthProvider(),
+    auth=AuthSettings(
+        issuer_url=_server_url,
+        resource_server_url=_server_url,
+    ),
 )
 
 
