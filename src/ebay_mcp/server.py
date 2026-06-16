@@ -53,6 +53,7 @@ async def lifespan(app: FastMCP) -> AsyncIterator[None]:
         cert_id=os.environ["EBAY_CERT_ID"],
         ru_name=os.getenv("EBAY_RU_NAME", ""),
         base_url=_base_url,
+        seed_refresh_token=os.getenv("EBAY_REFRESH_TOKEN"),
     )
     _order_client = EbayOrderClient(_user_token_manager, _base_url)
     try:
@@ -121,8 +122,12 @@ async def ebay_connect(code: str) -> str:
         parsed = parse_qs(urlparse(code).query)
         code = parsed.get("code", [code])[0]
     try:
-        await _user_token_manager.exchange_code(code)
-        return json.dumps({"status": "connected", "message": "eBay account connected successfully."})
+        refresh_token = await _user_token_manager.exchange_code(code)
+        return json.dumps({
+            "status": "connected",
+            "message": "eBay account connected successfully. To persist across restarts, add the refresh_token value as EBAY_REFRESH_TOKEN in your Railway environment variables.",
+            "refresh_token": refresh_token,
+        })
     except Exception as exc:
         return json.dumps({"error": str(exc)})
 

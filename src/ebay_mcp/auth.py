@@ -19,6 +19,7 @@ class EbayUserTokenManager:
         ru_name: str,
         base_url: str,
         token_file: str = "/tmp/ebay_user_token.json",
+        seed_refresh_token: str | None = None,
     ) -> None:
         self._app_id = app_id
         self._cert_id = cert_id
@@ -26,7 +27,7 @@ class EbayUserTokenManager:
         self._base_url = base_url
         self._token_file = token_file
         self._access_token: str | None = None
-        self._refresh_token: str | None = None
+        self._refresh_token: str | None = seed_refresh_token or None
         self._expires_at: float = 0.0
         self._lock = asyncio.Lock()
         try:
@@ -48,7 +49,7 @@ class EbayUserTokenManager:
     def _credentials(self) -> str:
         return base64.b64encode(f"{self._app_id}:{self._cert_id}".encode()).decode()
 
-    async def exchange_code(self, code: str) -> None:
+    async def exchange_code(self, code: str) -> str:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{self._base_url}/identity/v1/oauth2/token",
@@ -65,6 +66,7 @@ class EbayUserTokenManager:
         self._refresh_token = data.get("refresh_token")
         self._expires_at = time.time() + int(data.get("expires_in", 7200))
         self._save()
+        return self._refresh_token or ""
 
     async def get_token(self) -> str:
         if self._access_token and time.time() < self._expires_at - 60:
