@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "ebay": {
-      "url": "ebaysearchforclaude-production.up.railway.app"
+      "url": "https://ebaysearchforclaude-production.up.railway.app"
     }
   }
 }
