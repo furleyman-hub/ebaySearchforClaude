@@ -7,7 +7,7 @@ from typing import AsyncIterator
 
 from dotenv import load_dotenv
 from mcp.server.auth.settings import AuthSettings
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 from starlette.routing import Route
@@ -40,7 +40,7 @@ _order_client: EbayTradingClient | None = None
 
 
 @asynccontextmanager
-async def lifespan(app: FastMCP) -> AsyncIterator[None]:
+async def lifespan(app: MCPServer) -> AsyncIterator[None]:
     global _token_manager, _client, _user_token_manager, _order_client
     _token_manager = EbayTokenManager(
         app_id=os.environ["EBAY_APP_ID"],
@@ -67,11 +67,9 @@ async def lifespan(app: FastMCP) -> AsyncIterator[None]:
 
 _server_url = os.getenv("SERVER_URL", "https://ebaysearchforclaude-production.up.railway.app")
 
-mcp = FastMCP(
+mcp = MCPServer(
     "ebay-browse",
     lifespan=lifespan,
-    host="0.0.0.0",
-    port=int(os.getenv("PORT", "8000")),
     auth_server_provider=PersonalOAuthProvider(
         static_client_id=os.getenv("OAUTH_CLIENT_ID"),
         static_client_secret=os.getenv("OAUTH_CLIENT_SECRET"),
